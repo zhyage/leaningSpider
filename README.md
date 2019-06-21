@@ -1,56 +1,406 @@
-Learning Scrapy Book
-==========
+# 5GC000235 webEM backend side UCs
 
-This book covers the long awaited Scrapy v 1.0 that empowers you to extract useful data from virtually any source with very little effort. It starts off by explaining the fundamentals of Scrapy framework, followed by a thorough description of how to extract data from any source, clean it up, shape it as per your requirement using Python and 3rd party APIs. Next you will be familiarised with the process of storing the scrapped data in databases as well as search engines and performing real time analytics on them with Spark Streaming. By the end of this book, you will perfect the art of scraping data for your applications with ease.
+## prepare plan
 
-This book is now available on [Amazon](http://amzn.to/1PeQ5O0) and [Packt](https://www.packtpub.com/big-data-and-business-intelligence/learning-scrapy).
+```plantuml
+@startuml
+title webEM backend plan prepare
+autonumber
 
-## What you will learn
+participant webEM
+participant ASM
+participant CM
 
-- Understand HTML pages and write XPath to extract the data you need
-- Write Scrapy spiders with simple Python and do web crawls
-- Push your data into any database, search engine or analytics system
-- Configure your spider to download files, images and use proxies
-- Create efficient pipelines that shape data in precisely the form you want
-- Use Twisted Asynchronous API to process hundreds of items concurrently
-- Make your crawler super-fast by learning how to tune Scrapy's performance
-- Perform large scale distributed crawls with scrapyd and scrapinghub
+group prepare base plan
+alt load scf file
+webEM->ASM:download plan file request
+note over webEM, ASM
+input:
+    scf file
+    userName
+end note
+ASM->ASM:generate plan in working space and generate AsmPlanId
+note over ASM
+generate working space for every user,
+assume different user can't operate each other's plan
+end note
+else copy from exist planed configure
+webEM->ASM:copy plan request
+note over webEM, ASM
+input:
+    exist AsmPlanId
+    userName
+end note
+ASM->ASM:copy exist planed configure as new plan in working space and generate AsmPlanId
+else copy from current plan
+webEM->ASM:copy from current plan request
+ASM->CM:get current plan request
+CM->ASM:response
+note over ASM, CM
+output:
+    current plan raml file
+end note
+ASM->ASM:copy current plan to working space and generate AsmPlanId
+else prepare current plan(for edit current)
+webEM->ASM:prepare base current plan
+ASM->CM:get current plan from CM
+CM->ASM:response
+note over ASM, CM
+output:
+    current plan raml file
+end note
+ASM->ASM:copy current plan to working space, mark it as current plan, generate AsmPlanId
+end
+ASM->webEM:response
+note over webEM, ASM
+output:
+    operation result
+    AsmPlanId
+end note
+end
 
-## Tutorials
+```
+* what is different between "copy from current plan" and "prepare base current plan".  "copy from current plan" it means operator want generate an new planned configuration which based on current plan. eventually, this new plan will commission as a full plan. but "prepare current plan" is that operator want edit current running plan, and eventually, this this plan will commission as a delta plan.
 
-* How to Setup Software and Run Examples On A Windows Machine
+## validate plan
 
-[![image](https://cloud.githubusercontent.com/assets/789359/24506332/0c016008-1555-11e7-86e3-c736e953a199.PNG)](https://www.youtube.com/watch?v=r84-dsIRFI8)
+```plantuml
+@startuml
+title webEM backend plan validate
+autonumber
 
-* Chapter 4 - Create Appery.io mobile application - Updated process
+participant webEM
+participant ASM
+participant CM
 
-[![image](https://cloud.githubusercontent.com/assets/789359/24486821/e6c99072-1503-11e7-9d45-7eed9c13c7b6.png)](https://www.youtube.com/watch?v=FEbPyQJc3NE)
+group validate
+webEM->ASM:validate request
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+end note
+'alt current plan
+'ASM->ASM:generate delta plan raml file
+'else planed configure
+'ASM->ASM:generate full plan raml file
+'end
+ASM->ASM:generate plan raml file
+ASM->CM:download raml file
+note over ASM, CM
+input:
+    raml file
+end note
+CM->CM:generate planId
+CM->ASM:response
+note over ASM, CM
+output:
+    operation result
+    planId
+end note
+'alt current plan
+'ASM-->CM:delta plan validate request
+'note over ASM, CM
+'input:
+'    planId
+'    base plan version
+'    operationType: validate
+'end note
+'else planed configure
+'ASM-->CM:full plan validate request
+'note over ASM, CM
+'input:
+'    planId
+'    operationType: validate
+'end note
+'end
+ASM-->CM:plan validate request
+note over ASM, CM
+input:
+    planId
+    operationType: validate
+end note
+CM->CM:generate validate operation state
+CM-->ASM:async response
+note over ASM, CM
+output:
+    operationId
+    operationState
+    planId
+end note
+ASM->CM:keep polling validate operation state
+CM->ASM:response
+alt already get the final validate state from CM
+ASM->CM:delete operation state
+CM->CM:delete operation state
+CM->ASM:response
+ASM->CM:delete plan(no api)
+note over ASM, CM
+input:
+    planId
+end note
+CM->ASM:response
+ASM->ASM:delete raml file
+ASM->webEM:validate response
+end
+end
 
-* Chapter 3 & 9 on a 32-bit VM (for computers limited memory/processing power)
 
-[![image](https://cloud.githubusercontent.com/assets/789359/24482446/26a8eae6-14e9-11e7-9244-d5117954ccea.png)](https://www.youtube.com/watch?v=w9ditoIQ7sU)
+@enduml
 
-## To use Docker directly without installing Vagrant
+```
+* currently CM only support validate as 3 steps  1. download plan file, 2.perform validate, 3. delete plan file from CM. wish it could provide an all in one operation such as provision.
 
-A `docker-compose.yml` file is included, mainly for those who already have Docker installed. For completeness, here are the links to go about installing Docker.
+* will CM support delta validate?
 
-* For OS X El Capitan 10.11 and later, get [Docker for Mac](https://docs.docker.com/docker-for-mac/).
-* For earlier OS X, get [Docker Toolbox for Mac](https://docs.docker.com/toolbox/toolbox_install_mac/).
-* For Windows 10 Pro, with Enterprise and Education (1511 November update, Build 10586 or later), get [Docker for Windows](https://docs.docker.com/docker-for-windows/).
-* For Windows 7, 8.1 or other 10, get [Docker Toolbox for Windows](https://docs.docker.com/toolbox/toolbox_install_windows/).
-* For Ubuntu and other Linux distributions, install
-[docker](https://docs.docker.com/engine/installation/linux/ubuntu/) and
-[docker-compose](https://docs.docker.com/compose/install/).
-  To [avoid having to use sudo when you use the docker command](https://docs.docker.com/engine/installation/linux/linux-postinstall/),
-create a Unix group called docker and add users to it:
-  1. `sudo groupadd docker`
-  2. `sudo usermod -aG docker $USER`
+* it is better if ASM could perform validate by it self
 
-Once you have Docker installed and started, change to the project directory and run:
 
-  1. `docker-compose pull` - To check for updated images
-  2. `docker-compose up` - Will scroll log messages as various containers (virtual machines) start up. To stop the containers, Ctrl-C in this window, or enter `docker-compose down` in another shell window.
+## activate plan
 
-`docker system prune` will delete the system-wide Docker images, containers, and volumes that are not in use when you want to recover space.
+```plantuml
+@startuml
+title webEM backend plan activate
+autonumber
 
-See also [the official website](http://scrapybook.com)
+participant webEM
+participant ASM
+participant CM
+
+
+group activate
+webEM->ASM:activate request
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+end note
+
+alt plan based on current plan
+ASM->ASM:generate delta plan raml file
+ASM-->CM:delta commission?
+note over ASM, CM
+input:
+    delta plan raml file
+    base plan version
+end note
+else planed configure
+ASM->ASM:generate full plan raml file
+ASM-->CM:provision request
+note over ASM, CM
+input:
+    full plan raml file
+end note
+end
+
+CM->CM:generate operation state
+CM-->ASM:async response
+note over ASM, CM
+output:
+    operationId
+    operationState
+    planId
+end note
+ASM->CM:keep polling operation state
+CM->ASM:response with operation state
+alt already get the final provision state from CM
+ASM->CM:delete operation state
+CM->ASM:response
+ASM->ASM:delete raml file
+ASM->webEM:response
+end
+
+end
+
+@enduml
+```
+
+## fetch plan list
+
+```plantuml
+@startuml
+title webEM backend fetch plan list
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group fetch plan list
+webEM->ASM:fetch plan list
+note over webEM, ASM
+input:
+    userName
+end note
+ASM->ASM:fetch all plan in certain user's working space
+ASM->webEM:response
+note over webEM, ASM
+output:
+    list of AsmPlanId(if current plan exist, mark it)
+end note
+end
+
+@enduml
+```
+
+* its for webEM could get all plan list incase webEM restart
+
+## delete plan
+
+```plantuml
+@startuml
+title webEM backend plan delete
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group delete plan
+webEM->ASM:delete plan
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+end note
+ASM->ASM:delete corresponding plan from working space
+ASM->webEM:response
+note over webEM, ASM
+output:
+    operation result
+end note
+end
+
+@enduml
+```
+
+* ASM side didn't delete any plan, unless webEM ask for it.
+
+
+## search plan
+
+```plantuml
+@startuml
+title webEM backend plan search
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group search plan
+webEM->ASM:search plan
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+    searchFilter (json format)
+end note
+ASM->ASM:performance search
+ASM->webEM:response
+note over webEM, ASM
+output:
+    operation result
+    search result (json format)
+end note
+end
+
+@enduml
+```
+
+## change plan
+
+```plantuml
+@startuml
+title webEM backend change plan
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group change plan
+webEM->ASM:change plan
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+    operation type:new/delete/modify
+    content: dn, parameter... json format
+end note
+ASM->ASM:change working space plan
+ASM->ASM:delta validate(if needed)
+ASM->webEM:response
+note over webEM, ASM
+output:
+    operation result
+    validate result(if delta validate is needed)
+end note
+end
+
+@enduml
+```
+
+* not sure if ASM side could perform validate by it self
+
+* not sure delta validate is ready or not
+
+* since validation need take time, better not commit change parameter level 
+
+## fix plan
+
+```plantuml
+@startuml
+title webEM backend plan fix
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group plan fix
+webEM->ASM:fix plan request
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+    fixType:
+        create all missing mandatory parameters
+        create all missing mandatory objects
+end note
+ASM->ASM:fix plan
+ASM->webEM:fix response
+end
+@enduml
+```
+
+## rollback plan
+
+```plantuml
+@startuml
+title webEM backend plan rollback
+autonumber
+
+participant webEM
+participant ASM
+participant CM
+
+group plan rollback
+webEM->ASM:rollback request
+note over webEM, ASM
+input:
+    AsmPlanId
+    userName
+end note
+alt current plan
+ASM->ASM:rollback plan to current running plan
+else
+ASM->ASM:rollback plan to when it first created
+end
+ASM->webEM:rollback response
+end
+
+@enduml
+```
+
+* for current plan, rollback is to current running plan
